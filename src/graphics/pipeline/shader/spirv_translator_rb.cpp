@@ -651,7 +651,8 @@ void SpirvShaderTranslator::CompleteFragmentShaderInMain() {
                                                   uint32_t host_sample_index, float threshold_base,
                                                   float threshold_offset_scale) -> spv::Id {
           spv::Id sample_threshold = builder_->createBinOp(
-              spv::OpFSub, type_float_, builder_->makeFloatConstant(threshold_base),
+              spv::OpFSub, type_float_,
+              builder_->makeFloatConstant(threshold_base - xenos::kAlphaToMaskThresholdTolerance),
               builder_->createBinOp(spv::OpFMul, type_float_, alpha_to_coverage_offset_float,
                                     builder_->makeFloatConstant(threshold_offset_scale)));
           spv::Id sample_covered = builder_->createBinOp(spv::OpFOrdGreaterThanEqual, type_bool_,

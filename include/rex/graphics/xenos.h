@@ -292,6 +292,12 @@ enum class MsaaSamples : uint32_t {
 
 constexpr uint32_t kMsaaSamplesBits = 2;
 
+// Host shader math can leave an opaque surface's alpha a hair under 1.0 (seen in
+// 545407F8 on poles and tree trunks). With dithered alpha to mask offsets, a
+// pixel with offset 0 needs 1.0 to keep all its samples, so such surfaces got a
+// dot pattern. Thresholds are lowered by half an 8-bit step.
+constexpr float kAlphaToMaskThresholdTolerance = 0.5f / 255.0f;
+
 constexpr uint32_t kColorRenderTargetIndexBits = 2;
 constexpr uint32_t kMaxColorRenderTargets = 4;
 
