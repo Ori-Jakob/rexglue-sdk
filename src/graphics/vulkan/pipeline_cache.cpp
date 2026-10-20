@@ -702,6 +702,13 @@ void VulkanPipelineCache::InitializeShaderStorage(const std::filesystem::path& c
            pipeline_storage_file_);
   }
 
+  // C needs a seek between a read and a write on an update stream, or later
+  // writes may fail. The files are in append mode, so this moves nothing.
+  rex::filesystem::Seek(pipeline_storage_file_, 0, SEEK_END);
+  if (shader_storage_file_) {
+    rex::filesystem::Seek(shader_storage_file_, 0, SEEK_END);
+  }
+
   shader_storage_cache_root_ = cache_root;
   shader_storage_title_id_ = title_id;
 
@@ -3694,7 +3701,15 @@ void VulkanPipelineCache::StorageWriteThread() {
 
     if (write_pipeline) {
       assert_not_null(pipeline_storage_file_);
-      fwrite(&pipeline_description, sizeof(pipeline_description), 1, pipeline_storage_file_);
+      if (fwrite(&pipeline_description, sizeof(pipeline_description), 1,
+                 pipeline_storage_file_) != 1) {
+        static bool write_failure_logged = false;
+        if (!write_failure_logged) {
+          write_failure_logged = true;
+          REXGPU_WARN("Pipeline storage: writing a pipeline description failed; pipelines "
+                      "created in this run will not be stored");
+        }
+      }
     }
   }
 }
