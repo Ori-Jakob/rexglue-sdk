@@ -29,6 +29,10 @@
 REXCVAR_DEFINE_BOOL(host_present_from_non_ui_thread, true, "UI/Presenter",
                     "Allow presentation from non-UI thread");
 
+REXCVAR_DEFINE_BOOL(present_vsync, false, "UI/Presenter",
+                    "Wait for the display's refresh when presenting: no tearing, and no "
+                    "more frames than the display shows");
+
 REXCVAR_DEFINE_BOOL(present_letterbox, true, "UI/Presenter",
                     "Enable letterboxing for non-native aspect ratios");
 

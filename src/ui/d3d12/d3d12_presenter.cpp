@@ -30,6 +30,8 @@
 #include <ffx_api/ffx_upscale.h>
 #endif
 
+REXCVAR_DECLARE(bool, present_vsync);
+
 REXCVAR_DEFINE_BOOL(d3d12_allow_variable_refresh_rate_and_tearing, true, "UI/D3D12",
                     "Allow variable refresh rate and tearing");
 
@@ -350,7 +352,8 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
   if (paint_context_.swap_chain) {
     if (was_paintable && paint_context_.swap_chain_width == new_swap_chain_width &&
         paint_context_.swap_chain_height == new_swap_chain_height) {
-      is_vsync_implicit_out = false;
+      paint_context_.vsync = REXCVAR_GET(present_vsync);
+      is_vsync_implicit_out = paint_context_.vsync;
       return SurfacePaintConnectResult::kSuccessUnchanged;
     }
     paint_context_.AwaitSwapChainUsageCompletion();
@@ -478,7 +481,8 @@ D3D12Presenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_sur
         provider_.OffsetRTVDescriptor(rtv_heap_start, PaintContext::kRTVIndexSwapChainBuffer0 + i));
   }
 
-  is_vsync_implicit_out = false;
+  paint_context_.vsync = REXCVAR_GET(present_vsync);
+  is_vsync_implicit_out = paint_context_.vsync;
   return SurfacePaintConnectResult::kSuccess;
 }
 
@@ -555,6 +559,11 @@ void D3D12Presenter::PaintContext::DestroySwapChain() {
 }
 
 Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawers) {
+  // Reconnecting tells the presenter whether presentation now waits for vsync.
+  if (REXCVAR_GET(present_vsync) != paint_context_.vsync) {
+    return PaintResult::kNotPresentedConnectionOutdated;
+  }
+
   // Begin the command list with the command allocator not currently potentially
   // used on the GPU.
   UINT64 current_paint_submission = paint_context_.paint_submission_tracker.GetCurrentSubmission();
@@ -1147,17 +1156,21 @@ Presenter::PaintResult D3D12Presenter::PaintAndPresentImpl(bool execute_ui_drawe
     ui_submission_tracker_.NextSubmission();
   }
   paint_context_.paint_submission_tracker.NextSubmission();
-  // Present as soon as possible, without waiting for vsync (the host refresh
-  // rate may be something like 144 Hz, which is not a multiple of the common
-  // 30 Hz or 60 Hz guest refresh rate), and allowing dropping outdated queued
-  // frames for lower latency. Also, if possible, allowing tearing to use
-  // variable refresh rate in borderless fullscreen (note that if DXGI
-  // fullscreen is ever used in, the allow tearing flag must not be passed in
-  // fullscreen, but DXGI fullscreen is largely unneeded with the flip
-  // presentation model used in Direct3D 12).
-  HRESULT present_result = paint_context_.swap_chain->Present(
-      0, DXGI_PRESENT_RESTART |
-             (paint_context_.swap_chain_allows_tearing ? DXGI_PRESENT_ALLOW_TEARING : 0));
+  // Without vsync, present as soon as possible (the host refresh rate may be
+  // something like 144 Hz, which is not a multiple of the common 30 Hz or
+  // 60 Hz guest refresh rate), and allow dropping outdated queued frames for
+  // lower latency. Also, if possible, allow tearing to use variable refresh
+  // rate in borderless fullscreen (note that if DXGI fullscreen is ever used
+  // in, the allow tearing flag must not be passed in fullscreen, but DXGI
+  // fullscreen is largely unneeded with the flip presentation model used in
+  // Direct3D 12). Tearing must not be requested with a sync interval.
+  HRESULT present_result =
+      paint_context_.vsync
+          ? paint_context_.swap_chain->Present(1, 0)
+          : paint_context_.swap_chain->Present(
+                0, DXGI_PRESENT_RESTART | (paint_context_.swap_chain_allows_tearing
+                                               ? DXGI_PRESENT_ALLOW_TEARING
+                                               : 0));
   // Even if presentation has failed, work might have been enqueued anyway
   // internally before the failure according to Jesse Natalie from the DirectX
   // Discord server.
