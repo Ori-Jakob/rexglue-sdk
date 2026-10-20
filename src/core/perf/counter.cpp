@@ -154,6 +154,16 @@ void SetCsvLogPath(const std::string& path) {
 }
 
 void WriteCsvFrame() {
+  // Frames are flipped inside the GPU plugin, which carries its own copy of
+  // this state, so a path set by the host never arrives here. An environment
+  // variable reaches every module.
+  static bool env_checked = false;
+  if (!g_csv_file && !env_checked) {
+    env_checked = true;
+    if (const char* env_path = std::getenv("REX_PERF_LOG_CSV"); env_path && *env_path) {
+      SetCsvLogPath(env_path);
+    }
+  }
   if (!g_csv_file)
     return;
 

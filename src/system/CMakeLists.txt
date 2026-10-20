@@ -102,7 +102,7 @@ endif()
 
 if(REXGLUE_ENABLE_PERF_COUNTERS)
     target_compile_definitions(rexruntime PUBLIC
-        $<$<NOT:$<CONFIG:Release>>:REXGLUE_ENABLE_PERF_COUNTERS>)
+        REXGLUE_ENABLE_PERF_COUNTERS)
 endif()
 
 if(WIN32)
