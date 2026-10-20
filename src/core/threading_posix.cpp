@@ -414,9 +414,11 @@ class PosixConditionBase {
       if (timeout == std::chrono::milliseconds::max()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
       } else {
-        auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - now);
-        auto sleep_time = std::min(remaining, std::chrono::milliseconds(1));
-        std::this_thread::sleep_for(sleep_time);
+        // Sleep the real remaining time, at most 1 ms. Truncating it to whole
+        // milliseconds turned every wait under 1 ms into a busy spin, and the
+        // alertable waits poll in 1 ms slices, so their threads never slept.
+        std::this_thread::sleep_for(std::min<std::chrono::steady_clock::duration>(
+            end_time - now, std::chrono::milliseconds(1)));
       }
     }
   }
