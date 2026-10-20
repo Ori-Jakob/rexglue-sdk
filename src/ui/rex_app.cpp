@@ -350,10 +350,15 @@ bool ReXApp::SetupPresentation() {
   if (REXCVAR_GET(fullscreen)) {
     window_->SetFullscreen(true);
   }
+  // The cvar can change on any thread, such as a game thread running a settings
+  // menu, but the window may only be changed on the UI thread.
   rex::cvar::RegisterChangeCallback("fullscreen", [this](std::string_view, std::string_view value) {
-    if (window_) {
-      window_->SetFullscreen(rex::string::from_string<bool>(value, false));
-    }
+    const bool fullscreen = rex::string::from_string<bool>(value, false);
+    app_context().CallInUIThreadDeferred([this, fullscreen] {
+      if (window_) {
+        window_->SetFullscreen(fullscreen);
+      }
+    });
   });
   window_->Open();
 
