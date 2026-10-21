@@ -45,6 +45,8 @@ class ImGuiDrawer : public WindowInputListener, public UIDrawer {
   Style& style() { return style_; }
   const Style& style() const { return style_; }
 
+  Window* window() const { return window_; }
+
   void AddDialog(ImGuiDialog* dialog);
   void RemoveDialog(ImGuiDialog* dialog);
 

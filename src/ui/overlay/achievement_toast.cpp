@@ -14,19 +14,38 @@
 #include <algorithm>
 
 #include <rex/ui/immediate_drawer.h>
+#include <rex/ui/window.h>
+#include <rex/ui/windowed_app_context.h>
 
 namespace rex::ui {
 
 AchievementToastDialog::AchievementToastDialog(ImGuiDrawer* drawer,
                                                ImmediateDrawer* immediate_drawer,
                                                rex::Runtime* runtime)
-    : AchievementNotificationDialog(drawer), icon_cache_(immediate_drawer, runtime) {}
+    : AchievementNotificationDialog(drawer), icon_cache_(immediate_drawer, runtime) {
+  imgui_drawer()->RemoveDialog(this);
+  attached_ = false;
+}
 
-AchievementToastDialog::~AchievementToastDialog() {}
+AchievementToastDialog::~AchievementToastDialog() {
+  *alive_ = false;
+}
 
 void AchievementToastDialog::Push(const rex::system::AchievementEvent& event) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  queue_.push_back({event, std::chrono::steady_clock::now()});
+  bool was_empty;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    was_empty = queue_.empty();
+    queue_.push_back({event, std::chrono::steady_clock::now()});
+  }
+  if (was_empty) {
+    imgui_drawer()->window()->app_context().CallInUIThread([this, alive = alive_] {
+      if (*alive && !attached_) {
+        imgui_drawer()->AddDialog(this);
+        attached_ = true;
+      }
+    });
+  }
 }
 
 void AchievementToastDialog::OnDraw(ImGuiIO& io) {
@@ -34,6 +53,7 @@ void AchievementToastDialog::OnDraw(ImGuiIO& io) {
 
   PendingToast toast;
   float age = 0.0f;
+  bool empty = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     while (!queue_.empty()) {
@@ -47,10 +67,15 @@ void AchievementToastDialog::OnDraw(ImGuiIO& io) {
         break;
       }
     }
-    if (queue_.empty()) {
-      return;
+    empty = queue_.empty();
+    if (!empty) {
+      toast = queue_.front();
     }
-    toast = queue_.front();
+  }
+  if (empty) {
+    imgui_drawer()->RemoveDialog(this);
+    attached_ = false;
+    return;
   }
 
   float alpha = 1.0f;

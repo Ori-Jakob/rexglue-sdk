@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <deque>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <rex/ui/overlay/achievement_notification.h>
@@ -50,6 +51,10 @@ class AchievementToastDialog : public AchievementNotificationDialog {
   std::mutex mutex_;
   std::deque<PendingToast> queue_;
   AchievementIconCache icon_cache_;
+  // UI thread only. While no toast is queued the dialog is detached from the
+  // drawer, or the presenter would keep repainting for an empty overlay.
+  bool attached_ = true;
+  std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);
 };
 
 }  // namespace rex::ui
